@@ -1,21 +1,74 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Dictionary</title>
+</head>
+<body>
+  <h1>My Dictionary</h1>
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAosg4GV5ZxQFLCh6VuqY0koXAdHZZGW78",
-  authDomain: "my-dictionary-427dd.firebaseapp.com",
-  projectId: "my-dictionary-427dd",
-  storageBucket: "my-dictionary-427dd.firebasestorage.app",
-  messagingSenderId: "292732103597",
-  appId: "1:292732103597:web:1c9515c1d0f61cae438f24",
-  measurementId: "G-3JRX4KTHMB"
-};
+  <form id="addForm">
+    <input id="word" placeholder="Word" required>
+    <input id="meaning" placeholder="Meaning" required>
+    <button type="submit">Add</button>
+  </form>
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+  <ul id="vocabList"></ul>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, serverTimestamp,
+      query, orderBy, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // 🔹 Config kamu sendiri
+    const firebaseConfig = {
+      apiKey: "AIzaSyAosg4GV5ZxQFLCh6VuqY0koXAdHZZGW78",
+      authDomain: "my-dictionary-427dd.firebaseapp.com",
+      projectId: "my-dictionary-427dd",
+      storageBucket: "my-dictionary-427dd.appspot.com",
+      messagingSenderId: "292732103597",
+      appId: "1:292732103597:web:1c9515c1d0f61cae438f24",
+      measurementId: "G-3JRX4KTHMB"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Tambah vocab baru
+    async function addVocab(word, meaning) {
+      await addDoc(collection(db, "vocab"), {
+        word, meaning, createdAt: serverTimestamp()
+      });
+    }
+
+    // Baca vocab realtime
+    function listenVocab() {
+      const q = query(collection(db, "vocab"), orderBy("createdAt", "desc"));
+      onSnapshot(q, (snapshot) => {
+        let html = "";
+        snapshot.forEach((doc) => {
+          const d = doc.data();
+          html += `<li><b>${d.word}</b> – ${d.meaning}</li>`;
+        });
+        document.getElementById("vocabList").innerHTML = html || "<li><i>Belum ada entri</i></li>";
+      });
+    }
+
+    // Jalankan pas web kebuka
+    document.addEventListener("DOMContentLoaded", () => {
+      listenVocab();
+      document.getElementById("addForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const w = document.getElementById("word").value.trim();
+        const m = document.getElementById("meaning").value.trim();
+        if (!w || !m) return;
+        addVocab(w, m);
+        e.target.reset();
+        document.getElementById("word").focus();
+      });
+    });
+  </script>
+</body>
+</html>
