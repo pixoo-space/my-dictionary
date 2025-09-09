@@ -328,6 +328,26 @@
             100% { transform: rotate(360deg); }
         }
         
+        .firebase-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        .firebase-connected {
+            background-color: #4caf50;
+            color: white;
+        }
+        
+        .firebase-disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+        
         @media (max-width: 768px) {
             header {
                 flex-direction: column;
@@ -483,6 +503,8 @@
         </div>
     </div>
 
+    <div id="firebaseStatus" class="firebase-status firebase-disconnected">Firebase: Disconnected</div>
+
     <!-- Import Firebase SDK -->
     <script type="module">
         // Import Firebase functions
@@ -506,6 +528,7 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const statusElement = document.getElementById('firebaseStatus');
 
         // Data vocabulary
         let vocabData = [];
@@ -513,6 +536,7 @@
         let editMode = false;
         let currentEditId = null;
         let currentFilter = 'all';
+        let isFirstLoad = true;
         
         // Elemen DOM
         const vocabBody = document.getElementById('vocabBody');
@@ -530,6 +554,26 @@
         const filters = document.querySelectorAll('.filter');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const saveBtn = document.getElementById('saveBtn');
+
+        // Data contoh untuk awal (jika Firestore kosong)
+        const sampleVocabData = [
+            { word: "Diligent", meaning: "Rajin", pronunciation: "Dilijen", pos: "Adjective", example: "She is a diligent student.", synonym: "Hardworking", category: "Lazy", mastery: "2" },
+            { word: "Endure", meaning: "Tahan", pronunciation: "Indur", pos: "Verb", example: "I can't endure this pain.", synonym: "Bear, Tolerate", category: "Succumb", mastery: "3" },
+            { word: "Vast", meaning: "Luas", pronunciation: "Vas", pos: "Adjective", example: "They crossed the vast desert.", synonym: "Huge, Extensive", category: "Narrow", mastery: "3" },
+            { word: "Approachable", meaning: "Mudah didekati", pronunciation: "Aproachable", pos: "Adjective", example: "The manager is very approachable.", synonym: "Friendly, Accessible", category: "Unapproachable", mastery: "1" },
+            { word: "Consensus", meaning: "Kesepakatan bersama", pronunciation: "Konsensus", pos: "Noun", example: "We need to reach a consensus on this issue.", synonym: "Agreement, Harmony", category: "Disagreement", mastery: "2" }
+        ];
+
+        // Fungsi untuk menampilkan status koneksi Firebase
+        function updateFirebaseStatus(connected) {
+            if (connected) {
+                statusElement.textContent = "Firebase: Connected";
+                statusElement.className = "firebase-status firebase-connected";
+            } else {
+                statusElement.textContent = "Firebase: Disconnected";
+                statusElement.className = "firebase-status firebase-disconnected";
+            }
+        }
 
         // Fungsi untuk menampilkan/menyembunyikan loading
         function showLoading(show) {
@@ -780,6 +824,67 @@
             alert('Fitur export akan mengunduh file Excel dengan semua vocabulary Anda. Data Anda aman dan tersimpan di browser.');
             // Dalam implementasi nyata, ini akan mengunduh file Excel
         }
+
+        // Tambah data contoh jika Firestore kosong
+        async function addSampleDataIfNeeded() {
+            try {
+                // Cek apakah collection kosong
+                const querySnapshot = await getDocs(collection(db, "vocabularies"));
+                if (querySnapshot.empty) {
+                    // Tambahkan data contoh
+                    for (const item of sampleVocabData) {
+                        await addDoc(collection(db, "vocabularies"), {
+                            ...item,
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                    console.log("Sample data added to Firestore");
+                }
+            } catch (error) {
+                console.error("Error adding sample data: ", error);
+            }
+        }
+        
+        // Muat data dari Firestore
+        function loadVocabFromFirestore() {
+            showLoading(true);
+            
+            const q = query(collection(db, "vocabularies"), orderBy("createdAt", "desc"));
+            
+            onSnapshot(q, (querySnapshot) => {
+                vocabData = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    vocabData.push({
+                        id: doc.id,
+                        word: data.word,
+                        meaning: data.meaning,
+                        pronunciation: data.pronunciation,
+                        pos: data.pos,
+                        example: data.example,
+                        synonym: data.synonym,
+                        category: data.category,
+                        mastery: data.mastery
+                    });
+                });
+                
+                renderVocabTable();
+                showLoading(false);
+                updateFirebaseStatus(true);
+
+                // Tambahkan data contoh jika pertama kali load dan Firestore kosong
+                if (isFirstLoad && vocabData.length === 0) {
+                    addSampleDataIfNeeded();
+                    isFirstLoad = false;
+                }
+            }, (error) => {
+                console.error("Error loading documents: ", error);
+                showLoading(false);
+                updateFirebaseStatus(false);
+                vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #d81b60;">Error loading data. Please check your connection.</td></tr>`;
+            });
+        }
         
         // Event Listeners
         addBtn.addEventListener('click', addVocab);
@@ -811,38 +916,6 @@
                 modal.style.display = 'none';
             }
         });
-        
-        // Muat data dari Firestore
-        function loadVocabFromFirestore() {
-            showLoading(true);
-            
-            const q = query(collection(db, "vocabularies"), orderBy("createdAt", "desc"));
-            
-            onSnapshot(q, (querySnapshot) => {
-                vocabData = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    vocabData.push({
-                        id: doc.id,
-                        word: data.word,
-                        meaning: data.meaning,
-                        pronunciation: data.pronunciation,
-                        pos: data.pos,
-                        example: data.example,
-                        synonym: data.synonym,
-                        category: data.category,
-                        mastery: data.mastery
-                    });
-                });
-                
-                renderVocabTable();
-                showLoading(false);
-            }, (error) => {
-                console.error("Error loading documents: ", error);
-                showLoading(false);
-                vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #d81b60;">Error loading data. Please check your connection.</td></tr>`;
-            });
-        }
         
         // Muat data saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
