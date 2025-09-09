@@ -307,6 +307,26 @@
             color: #ff4081;
             text-shadow: 0px 0px 1px rgba(0,0,0,0.3);
         }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #ec407a;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         
         @media (max-width: 768px) {
             header {
@@ -362,6 +382,9 @@
         </div>
         
         <div class="table-container">
+            <div class="loading" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+            </div>
             <table id="vocabTable">
                 <thead>
                     <tr>
@@ -454,22 +477,38 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" id="cancelBtn">Cancel</button>
-                    <button type="submit">Save</button>
+                    <button type="submit" id="saveBtn">Save</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script>
-        // Data contoh untuk awal
-        let vocabData = [
-            { id: 1, word: "Diligent", meaning: "Rajin", pronunciation: "Dilijen", pos: "Adjective", example: "She is a diligent student.", synonym: "Hardworking", category: "Trait", mastery: "2" },
-            { id: 2, word: "Endure", meaning: "Tahan", pronunciation: "Indur", pos: "Verb", example: "I can't endure this pain.", synonym: "Bear, Tolerate", category: "Trait", mastery: "3" },
-            { id: 3, word: "Vast", meaning: "Luas", pronunciation: "Vas", pos: "Adjective", example: "They crossed the vast desert.", synonym: "Huge, Extensive", category: "Size", mastery: "3" },
-            { id: 4, word: "Approachable", meaning: "Mudah didekati", pronunciation: "Aproachable", pos: "Adjective", example: "The manager is very approachable.", synonym: "Friendly, Accessible", category: "Personality", mastery: "1" },
-            { id: 5, word: "Consensus", meaning: "Kesepakatan bersama", pronunciation: "Konsensus", pos: "Noun", example: "We need to reach a consensus on this issue.", synonym: "Agreement, Harmony", category: "Business", mastery: "2" }
-        ];
-        
+    <!-- Import Firebase SDK -->
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { 
+            getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+            onSnapshot, serverTimestamp, query, orderBy 
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAosg4GV5ZxQFLCh6VuqY0koXAdHZZGW78",
+            authDomain: "my-dictionary-427dd.firebaseapp.com",
+            projectId: "my-dictionary-427dd",
+            storageBucket: "my-dictionary-427dd.appspot.com",
+            messagingSenderId: "292732103597",
+            appId: "1:292732103597:web:1c9515c1d0f61cae438f24",
+            measurementId: "G-3JRX4KTHMB"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Data vocabulary
+        let vocabData = [];
         let currentSort = { column: 'word', direction: 'asc' };
         let editMode = false;
         let currentEditId = null;
@@ -489,7 +528,15 @@
         const learningCount = document.getElementById('learningCount');
         const masteredCount = document.getElementById('masteredCount');
         const filters = document.querySelectorAll('.filter');
-        
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const saveBtn = document.getElementById('saveBtn');
+
+        // Fungsi untuk menampilkan/menyembunyikan loading
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'flex' : 'none';
+            vocabTable.style.display = show ? 'none' : 'table';
+        }
+
         // Fungsi untuk mengurutkan data berdasarkan abjad
         function sortDataAlphabetically() {
             vocabData.sort((a, b) => {
@@ -505,6 +552,14 @@
         // Render tabel vocabulary
         function renderVocabTable(data = vocabData) {
             vocabBody.innerHTML = '';
+            
+            if (data.length === 0) {
+                vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">No vocabulary found. Add some words to get started!</td></tr>`;
+                totalCount.textContent = '0';
+                learningCount.textContent = '0';
+                masteredCount.textContent = '0';
+                return;
+            }
             
             // Urutkan data berdasarkan abjad
             sortDataAlphabetically();
@@ -554,14 +609,14 @@
             // Tambahkan event listener untuk tombol edit dan hapus
             document.querySelectorAll('.edit-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const id = parseInt(e.target.closest('.edit-btn').getAttribute('data-id'));
+                    const id = e.target.closest('.edit-btn').getAttribute('data-id');
                     editVocab(id);
                 });
             });
             
             document.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const id = parseInt(e.target.closest('.delete-btn').getAttribute('data-id'));
+                    const id = e.target.closest('.delete-btn').getAttribute('data-id');
                     deleteVocab(id);
                 });
             });
@@ -599,16 +654,20 @@
         }
         
         // Hapus vocabulary
-        function deleteVocab(id) {
+        async function deleteVocab(id) {
             if (confirm('Apakah Anda yakin ingin menghapus vocabulary ini?')) {
-                vocabData = vocabData.filter(item => item.id !== id);
-                renderVocabTable();
-                saveToLocalStorage();
+                try {
+                    await deleteDoc(doc(db, "vocabularies", id));
+                    // Data akan otomatis diperbarui via onSnapshot listener
+                } catch (error) {
+                    console.error("Error deleting document: ", error);
+                    alert("Error deleting vocabulary. Please try again.");
+                }
             }
         }
         
         // Simpan vocabulary (tambah atau edit)
-        function saveVocab(e) {
+        async function saveVocab(e) {
             e.preventDefault();
             
             const word = document.getElementById('word').value;
@@ -620,12 +679,14 @@
             const category = document.getElementById('category').value;
             const mastery = document.getElementById('mastery').value;
             
-            if (editMode) {
-                // Edit vocabulary yang sudah ada
-                const index = vocabData.findIndex(item => item.id === currentEditId);
-                if (index !== -1) {
-                    vocabData[index] = {
-                        ...vocabData[index],
+            // Tampilkan loading state
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            saveBtn.disabled = true;
+            
+            try {
+                if (editMode) {
+                    // Edit vocabulary yang sudah ada
+                    await updateDoc(doc(db, "vocabularies", currentEditId), {
                         word,
                         meaning,
                         pronunciation,
@@ -633,28 +694,34 @@
                         example,
                         synonym,
                         category,
-                        mastery
-                    };
+                        mastery,
+                        updatedAt: serverTimestamp()
+                    });
+                } else {
+                    // Tambah vocabulary baru
+                    await addDoc(collection(db, "vocabularies"), {
+                        word,
+                        meaning,
+                        pronunciation,
+                        pos,
+                        example,
+                        synonym,
+                        category,
+                        mastery,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
                 }
-            } else {
-                // Tambah vocabulary baru
-                const newId = vocabData.length > 0 ? Math.max(...vocabData.map(item => item.id)) + 1 : 1;
-                vocabData.push({
-                    id: newId,
-                    word,
-                    meaning,
-                    pronunciation,
-                    pos,
-                    example,
-                    synonym,
-                    category,
-                    mastery
-                });
+                
+                modal.style.display = 'none';
+            } catch (error) {
+                console.error("Error saving document: ", error);
+                alert("Error saving vocabulary. Please try again.");
+            } finally {
+                // Reset loading state
+                saveBtn.innerHTML = 'Save';
+                saveBtn.disabled = false;
             }
-            
-            renderVocabTable();
-            saveToLocalStorage();
-            modal.style.display = 'none';
         }
         
         // Cari vocabulary
@@ -662,7 +729,7 @@
             const searchTerm = searchInput.value.toLowerCase();
             
             if (searchTerm.trim() === '') {
-                renderVocabTable();
+                renderVocabTable(vocabData);
                 return;
             }
             
@@ -714,20 +781,6 @@
             // Dalam implementasi nyata, ini akan mengunduh file Excel
         }
         
-        // Simpan ke localStorage
-        function saveToLocalStorage() {
-            localStorage.setItem('vocabData', JSON.stringify(vocabData));
-        }
-        
-        // Muat dari localStorage
-        function loadFromLocalStorage() {
-            const savedData = localStorage.getItem('vocabData');
-            if (savedData) {
-                vocabData = JSON.parse(savedData);
-            }
-            renderVocabTable();
-        }
-        
         // Event Listeners
         addBtn.addEventListener('click', addVocab);
         cancelBtn.addEventListener('click', () => modal.style.display = 'none');
@@ -759,9 +812,41 @@
             }
         });
         
+        // Muat data dari Firestore
+        function loadVocabFromFirestore() {
+            showLoading(true);
+            
+            const q = query(collection(db, "vocabularies"), orderBy("createdAt", "desc"));
+            
+            onSnapshot(q, (querySnapshot) => {
+                vocabData = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    vocabData.push({
+                        id: doc.id,
+                        word: data.word,
+                        meaning: data.meaning,
+                        pronunciation: data.pronunciation,
+                        pos: data.pos,
+                        example: data.example,
+                        synonym: data.synonym,
+                        category: data.category,
+                        mastery: data.mastery
+                    });
+                });
+                
+                renderVocabTable();
+                showLoading(false);
+            }, (error) => {
+                console.error("Error loading documents: ", error);
+                showLoading(false);
+                vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #d81b60;">Error loading data. Please check your connection.</td></tr>`;
+            });
+        }
+        
         // Muat data saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
-            loadFromLocalStorage();
+            loadVocabFromFirestore();
             // Set filter "all" sebagai aktif
             document.querySelector('.filter[data-filter="all"]').classList.add('active');
         });
