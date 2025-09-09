@@ -766,5 +766,57 @@
             document.querySelector('.filter[data-filter="all"]').classList.add('active');
         });
     </script>
+    <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, serverTimestamp,
+    query, orderBy, onSnapshot
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAosg4GV5ZxQFLCh6VuqY0koXAdHZZGW78",
+    authDomain: "my-dictionary-427dd.firebaseapp.com",
+    projectId: "my-dictionary-427dd",
+    storageBucket: "my-dictionary-427dd.appspot.com",
+    messagingSenderId: "292732103597",
+    appId: "1:292732103597:web:1c9515c1d0f61cae438f24",
+    measurementId: "G-3JRX4KTHMB"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  async function addVocab(word, meaning) {
+    await addDoc(collection(db, "vocab"), {
+      word, meaning, createdAt: serverTimestamp()
+    });
+  }
+
+  function listenVocab() {
+    const q = query(collection(db, "vocab"), orderBy("createdAt", "desc"));
+    onSnapshot(q, (snapshot) => {
+      let html = "";
+      snapshot.forEach((doc) => {
+        const d = doc.data();
+        html += `<li><b>${d.word}</b> – ${d.meaning}</li>`;
+      });
+      document.getElementById("vocabList").innerHTML = html || "<li><i>Belum ada entri</i></li>";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    listenVocab();
+    document.getElementById("addForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const w = document.getElementById("word").value.trim();
+      const m = document.getElementById("meaning").value.trim();
+      if (!w || !m) return;
+      addVocab(w, m);
+      e.target.reset();
+      document.getElementById("word").focus();
+    });
+  });
+</script>
 </body>
 </html>
+
