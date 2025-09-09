@@ -710,233 +710,244 @@
 
     <div id="firebaseStatus" class="firebase-status firebase-disconnected">Firebase: Disconnected</div>
 
-    <script>
-        // Data contoh untuk awal
-        let vocabData = [
-            { id: 1, word: "Diligent", meaning: "Rajin", pronunciation: "Dilijen", pos: "Adjective", example: "She is a diligent student.", synonym: "Hardworking", category: "Trait", mastery: "2" },
-            { id: 2, word: "Endure", meaning: "Tahan", pronunciation: "Indur", pos: "Verb", example: "I can't endure this pain.", synonym: "Bear, Tolerate", category: "Trait", mastery: "3" },
-            { id: 3, word: "Vast", meaning: "Luas", pronunciation: "Vas", pos: "Adjective", example: "They crossed the vast desert.", synonym: "Huge, Extensive", category: "Size", mastery: "3" },
-            { id: 4, word: "Approachable", meaning: "Mudah didekati", pronunciation: "Aproachable", pos: "Adjective", example: "The manager is very approachable.", synonym: "Friendly, Accessible", category: "Personality", mastery: "1" },
-            { id: 5, word: "Consensus", meaning: "Kesepakatan bersama", pronunciation: "Konsensus", pos: "Noun", example: "We need to reach a consensus on this issue.", synonym: "Agreement, Harmony", category: "Business", mastery: "2" }
-        ];
-        
-        let currentSort = { column: 'word', direction: 'asc' };
-        let editMode = false;
-        let currentEditId = null;
-        let currentFilter = 'all';
-        
-        // Elemen DOM
-        const vocabBody = document.getElementById('vocabBody');
-        const vocabForm = document.getElementById('vocabForm');
-        const modal = document.getElementById('vocabModal');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const addBtn = document.getElementById('addBtn');
-        const searchInput = document.getElementById('searchInput');
-        const exportBtn = document.getElementById('exportBtn');
-        const modalTitle = document.getElementById('modalTitle');
-        const editId = document.getElementById('editId');
-        const totalCount = document.getElementById('totalCount');
-        const learningCount = document.getElementById('learningCount');
-        const masteredCount = document.getElementById('masteredCount');
-        const filters = document.querySelectorAll('.filter');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const confirmModal = document.getElementById('confirmModal');
-        const vocabToDelete = document.getElementById('vocabToDelete');
-        const confirmCancelBtn = document.getElementById('confirmCancelBtn');
-        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-        const notification = document.getElementById('notification');
-        const notificationText = document.getElementById('notificationText');
-        
-        // Fungsi untuk menampilkan notifikasi
-        function showNotification(message, type = 'info') {
-            notificationText.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
-        }
+<script type="module">
+    // Import Firebase functions
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { 
+        getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+        onSnapshot, serverTimestamp, query, orderBy 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-        // Fungsi untuk menampilkan/menyembunyikan loading
-        function showLoading(show) {
-            loadingIndicator.style.display = show ? 'flex' : 'none';
-            document.getElementById('vocabTable').style.display = show ? 'none' : 'table';
-        }
+    // Firebase configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyAosg4GV5ZxQFLCh6VuqY0koXAdHZZGW78",
+        authDomain: "my-dictionary-427dd.firebaseapp.com",
+        projectId: "my-dictionary-427dd",
+        storageBucket: "my-dictionary-427dd.appspot.com",
+        messagingSenderId: "292732103597",
+        appId: "1:292732103597:web:1c9515c1d0f61cae438f24",
+        measurementId: "G-3JRX4KTHMB"
+    };
 
-        // Fungsi untuk mengurutkan data berdasarkan abjad
-        function sortDataAlphabetically() {
-            vocabData.sort((a, b) => {
-                let valueA = a.word.toLowerCase();
-                let valueB = b.word.toLowerCase();
-                
-                if (valueA < valueB) return -1;
-                if (valueA > valueB) return 1;
-                return 0;
-            });
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Data vocabulary
+    let vocabData = [];
+    let currentSort = { column: 'word', direction: 'asc' };
+    let editMode = false;
+    let currentEditId = null;
+    let currentFilter = 'all';
+    
+    // Elemen DOM
+    const vocabBody = document.getElementById('vocabBody');
+    const vocabForm = document.getElementById('vocabForm');
+    const modal = document.getElementById('vocabModal');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const addBtn = document.getElementById('addBtn');
+    const searchInput = document.getElementById('searchInput');
+    const exportBtn = document.getElementById('exportBtn');
+    const modalTitle = document.getElementById('modalTitle');
+    const editId = document.getElementById('editId');
+    const totalCount = document.getElementById('totalCount');
+    const learningCount = document.getElementById('learningCount');
+    const masteredCount = document.getElementById('masteredCount');
+    const filters = document.querySelectorAll('.filter');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const confirmModal = document.getElementById('confirmModal');
+    const vocabToDelete = document.getElementById('vocabToDelete');
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const notification = document.getElementById('notification');
+    const notificationText = document.getElementById('notificationText');
+
+    // Sembunyikan loading indicator
+    loadingIndicator.style.display = 'none';
+
+    // Fungsi untuk menampilkan notifikasi
+    function showNotification(message, type = 'info') {
+        notificationText.textContent = message;
+        notification.className = `notification ${type}`;
+        notification.classList.add('show');
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 3000);
+    }
+
+    // Fungsi untuk mengurutkan data berdasarkan abjad
+    function sortDataAlphabetically() {
+        vocabData.sort((a, b) => {
+            let valueA = a.word.toLowerCase();
+            let valueB = b.word.toLowerCase();
+            
+            if (valueA < valueB) return -1;
+            if (valueA > valueB) return 1;
+            return 0;
+        });
+    }
+    
+    // Render tabel vocabulary
+    function renderVocabTable(data = vocabData) {
+        vocabBody.innerHTML = '';
+        
+        if (data.length === 0) {
+            vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px;">No vocabulary found</td></tr>`;
+            totalCount.textContent = '0';
+            learningCount.textContent = '0';
+            masteredCount.textContent = '0';
+            return;
         }
         
-        // Render tabel vocabulary
-        function renderVocabTable(data = vocabData) {
-            vocabBody.innerHTML = '';
+        // Urutkan data berdasarkan abjad
+        sortDataAlphabetically();
+        
+        // Hitung statistik
+        const total = vocabData.length;
+        const learning = vocabData.filter(item => item.mastery === "2").length;
+        const mastered = vocabData.filter(item => item.mastery === "3").length;
+        
+        totalCount.textContent = total;
+        learningCount.textContent = learning;
+        masteredCount.textContent = mastered;
+        
+        // Terapkan filter
+        let filteredData = data;
+        if (currentFilter !== 'all') {
+            const masteryFilter = currentFilter === 'new' ? '1' : 
+                                currentFilter === 'learning' ? '2' : '3';
+            filteredData = data.filter(item => item.mastery === masteryFilter);
+        }
+        
+        if (filteredData.length === 0) {
+            vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px;">No vocabulary found for this filter</td></tr>`;
+            return;
+        }
+        
+        filteredData.forEach(item => {
+            const row = document.createElement('tr');
             
-            // Urutkan data berdasarkan abjad
-            sortDataAlphabetically();
-            
-            // Hitung statistik
-            const total = vocabData.length;
-            const learning = vocabData.filter(item => item.mastery === "2").length;
-            const mastered = vocabData.filter(item => item.mastery === "3").length;
-            
-            totalCount.textContent = total;
-            learningCount.textContent = learning;
-            masteredCount.textContent = mastered;
-            
-            // Terapkan filter
-            let filteredData = data;
-            if (currentFilter !== 'all') {
-                const masteryFilter = currentFilter === 'new' ? '1' : 
-                                    currentFilter === 'learning' ? '2' : '3';
-                filteredData = data.filter(item => item.mastery === masteryFilter);
+            // Konversi nilai mastery ke bintang
+            let masteryStars = '';
+            for (let i = 0; i < parseInt(item.mastery); i++) {
+                masteryStars += '⭐';
             }
             
-            if (filteredData.length === 0) {
-                vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px;">No vocabulary found</td></tr>`;
-                return;
-            }
+            row.innerHTML = `
+                <td>${item.word}</td>
+                <td>${item.meaning}</td>
+                <td>${item.pronunciation || '-'}</td>
+                <td>${item.pos || '-'}</td>
+                <td>${item.example || '-'}</td>
+                <td class="mastery-stars">${masteryStars}</td>
+                <td class="action-btns">
+                    <button class="edit-btn" data-id="${item.id}"><i class="fas fa-edit"></i></button>
+                    <button class="delete-btn" data-id="${item.id}" data-word="${item.word}"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
             
-            filteredData.forEach(item => {
-                const row = document.createElement('tr');
-                
-                // Konversi nilai mastery ke bintang
-                let masteryStars = '';
-                for (let i = 0; i < parseInt(item.mastery); i++) {
-                    masteryStars += '⭐';
-                }
-                
-                row.innerHTML = `
-                    <td>${item.word}</td>
-                    <td>${item.meaning}</td>
-                    <td>${item.pronunciation || '-'}</td>
-                    <td>${item.pos || '-'}</td>
-                    <td>${item.example || '-'}</td>
-                    <td class="mastery-stars">${masteryStars}</td>
-                    <td class="action-btns">
-                        <button class="edit-btn" data-id="${item.id}"><i class="fas fa-edit"></i></button>
-                        <button class="delete-btn" data-id="${item.id}" data-word="${item.word}"><i class="fas fa-trash"></i></button>
-                    </td>
-                `;
-                
-                vocabBody.appendChild(row);
-            });
-            
-            // Tambahkan event listener untuk tombol edit dan hapus
-            document.querySelectorAll('.edit-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const id = parseInt(e.target.closest('.edit-btn').getAttribute('data-id'));
-                    editVocab(id);
-                });
-            });
-            
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const id = parseInt(e.target.closest('.delete-btn').getAttribute('data-id'));
-                    const word = e.target.closest('.delete-btn').getAttribute('data-word');
-                    confirmDeleteVocab(id, word);
-                });
-            });
-        }
+            vocabBody.appendChild(row);
+        });
         
-        // Tambah vocabulary baru
-        function addVocab() {
-            editMode = false;
-            currentEditId = null;
-            modalTitle.innerHTML = '<i class="fas fa-plus"></i> Add New Vocabulary';
-            vocabForm.reset();
-            editId.value = '';
+        // Tambahkan event listener untuk tombol edit dan hapus
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.closest('.edit-btn').getAttribute('data-id');
+                editVocab(id);
+            });
+        });
+        
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.closest('.delete-btn').getAttribute('data-id');
+                const word = e.target.closest('.delete-btn').getAttribute('data-word');
+                confirmDeleteVocab(id, word);
+            });
+        });
+    }
+    
+    // Tambah vocabulary baru
+    function addVocab() {
+        editMode = false;
+        currentEditId = null;
+        modalTitle.innerHTML = '<i class="fas fa-plus"></i> Add New Vocabulary';
+        vocabForm.reset();
+        editId.value = '';
+        modal.style.display = 'flex';
+    }
+    
+    // Edit vocabulary
+    function editVocab(id) {
+        editMode = true;
+        currentEditId = id;
+        const vocab = vocabData.find(item => item.id === id);
+        
+        if (vocab) {
+            modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Vocabulary';
+            document.getElementById('word').value = vocab.word;
+            document.getElementById('meaning').value = vocab.meaning;
+            document.getElementById('pronunciation').value = vocab.pronunciation || '';
+            document.getElementById('pos').value = vocab.pos || '';
+            document.getElementById('example').value = vocab.example || '';
+            document.getElementById('synonym').value = vocab.synonym || '';
+            document.getElementById('category').value = vocab.category || '';
+            document.getElementById('mastery').value = vocab.mastery || '1';
+            editId.value = vocab.id;
             modal.style.display = 'flex';
         }
+    }
+    
+    // Konfirmasi hapus vocabulary
+    function confirmDeleteVocab(id, word) {
+        vocabToDelete.textContent = word;
+        confirmModal.style.display = 'flex';
         
-        // Edit vocabulary
-        function editVocab(id) {
-            editMode = true;
-            currentEditId = id;
-            const vocab = vocabData.find(item => item.id === id);
-            
-            if (vocab) {
-                modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Vocabulary';
-                document.getElementById('word').value = vocab.word;
-                document.getElementById('meaning').value = vocab.meaning;
-                document.getElementById('pronunciation').value = vocab.pronunciation || '';
-                document.getElementById('pos').value = vocab.pos || '';
-                document.getElementById('example').value = vocab.example || '';
-                document.getElementById('synonym').value = vocab.synonym || '';
-                document.getElementById('category').value = vocab.category || '';
-                document.getElementById('mastery').value = vocab.mastery || '1';
-                editId.value = vocab.id;
-                modal.style.display = 'flex';
-            }
-        }
+        // Set event listeners untuk tombol confirm
+        confirmCancelBtn.onclick = () => {
+            confirmModal.style.display = 'none';
+        };
         
-        // Konfirmasi hapus vocabulary
-        function confirmDeleteVocab(id, word) {
-            vocabToDelete.textContent = word;
-            confirmModal.style.display = 'flex';
-            
-            // Set event listeners untuk tombol confirm
-            confirmCancelBtn.onclick = () => {
-                confirmModal.style.display = 'none';
-            };
-            
-            confirmDeleteBtn.onclick = () => {
-                deleteVocab(id);
-                confirmModal.style.display = 'none';
-            };
-        }
-        
-        // Hapus vocabulary
-        function deleteVocab(id) {
-            vocabData = vocabData.filter(item => item.id !== id);
-            renderVocabTable();
+        confirmDeleteBtn.onclick = () => {
+            deleteVocab(id);
+            confirmModal.style.display = 'none';
+        };
+    }
+    
+    // Hapus vocabulary dari Firebase
+    async function deleteVocab(id) {
+        try {
+            await deleteDoc(doc(db, "vocabularies", id));
             showNotification('Vocabulary deleted successfully', 'success');
-            saveToLocalStorage();
+        } catch (error) {
+            console.error("Error deleting document: ", error);
+            showNotification("Error deleting vocabulary. Please try again.", 'error');
         }
+    }
+    
+    // Simpan vocabulary (tambah atau edit) ke Firebase
+    async function saveVocab(e) {
+        e.preventDefault();
         
-        // Simpan vocabulary (tambah atau edit)
-        function saveVocab(e) {
-            e.preventDefault();
-            
-            const word = document.getElementById('word').value;
-            const meaning = document.getElementById('meaning').value;
-            const pronunciation = document.getElementById('pronunciation').value;
-            const pos = document.getElementById('pos').value;
-            const example = document.getElementById('example').value;
-            const synonym = document.getElementById('synonym').value;
-            const category = document.getElementById('category').value;
-            const mastery = document.getElementById('mastery').value;
-            
+        const word = document.getElementById('word').value;
+        const meaning = document.getElementById('meaning').value;
+        const pronunciation = document.getElementById('pronunciation').value;
+        const pos = document.getElementById('pos').value;
+        const example = document.getElementById('example').value;
+        const synonym = document.getElementById('synonym').value;
+        const category = document.getElementById('category').value;
+        const mastery = document.getElementById('mastery').value;
+        
+        // Tampilkan loading state
+        const saveBtn = document.getElementById('saveBtn');
+        const originalBtnText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        saveBtn.disabled = true;
+        
+        try {
             if (editMode) {
-                // Edit vocabulary yang sudah ada
-                const index = vocabData.findIndex(item => item.id === currentEditId);
-                if (index !== -1) {
-                    vocabData[index] = {
-                        ...vocabData[index],
-                        word,
-                        meaning,
-                        pronunciation,
-                        pos,
-                        example,
-                        synonym,
-                        category,
-                        mastery
-                    };
-                    showNotification('Vocabulary updated successfully', 'success');
-                }
-            } else {
-                // Tambah vocabulary baru
-                const newId = vocabData.length > 0 ? Math.max(...vocabData.map(item => item.id)) + 1 : 1;
-                vocabData.push({
-                    id: newId,
+                // Edit vocabulary yang sudah ada di Firebase
+                await updateDoc(doc(db, "vocabularies", currentEditId), {
                     word,
                     meaning,
                     pronunciation,
@@ -944,127 +955,164 @@
                     example,
                     synonym,
                     category,
-                    mastery
+                    mastery,
+                    updatedAt: serverTimestamp()
+                });
+                showNotification('Vocabulary updated successfully', 'success');
+            } else {
+                // Tambah vocabulary baru ke Firebase
+                await addDoc(collection(db, "vocabularies"), {
+                    word,
+                    meaning,
+                    pronunciation,
+                    pos,
+                    example,
+                    synonym,
+                    category,
+                    mastery,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
                 });
                 showNotification('Vocabulary added successfully', 'success');
             }
             
+            modal.style.display = 'none';
+        } catch (error) {
+            console.error("Error saving document: ", error);
+            showNotification("Error saving vocabulary. Please try again.", 'error');
+        } finally {
+            // Reset loading state
+            saveBtn.innerHTML = originalBtnText;
+            saveBtn.disabled = false;
+        }
+    }
+    
+    // Cari vocabulary
+    function searchVocab() {
+        const searchTerm = searchInput.value.toLowerCase();
+        
+        if (searchTerm.trim() === '') {
+            renderVocabTable(vocabData);
+            return;
+        }
+        
+        const filteredData = vocabData.filter(item => 
+            item.word.toLowerCase().includes(searchTerm) ||
+            item.meaning.toLowerCase().includes(searchTerm) ||
+            (item.example && item.example.toLowerCase().includes(searchTerm)) ||
+            (item.synonym && item.synonym.toLowerCase().includes(searchTerm)) ||
+            (item.category && item.category.toLowerCase().includes(searchTerm))
+        );
+        
+        renderVocabTable(filteredData);
+    }
+    
+    // Urutkan data
+    function sortData(column) {
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'asc';
+        }
+        
+        vocabData.sort((a, b) => {
+            let valueA = a[column] || '';
+            let valueB = b[column] || '';
+            
+            // Untuk pengurutan numerik pada kolom mastery
+            if (column === 'mastery') {
+                valueA = parseInt(valueA);
+                valueB = parseInt(valueB);
+            } else {
+                // Untuk pengurutan teks
+                valueA = valueA.toString().toLowerCase();
+                valueB = valueB.toString().toLowerCase();
+            }
+            
+            if (valueA < valueB) return currentSort.direction === 'asc' ? -1 : 1;
+            if (valueA > valueB) return currentSort.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        renderVocabTable();
+    }
+    
+    // Export ke Excel (simulasi)
+    function exportToExcel() {
+        alert('Fitur export akan mengunduh file Excel dengan semua vocabulary Anda. Data Anda aman dan tersimpan di browser.');
+        // Dalam implementasi nyata, ini akan mengunduh file Excel
+    }
+
+    // Muat data dari Firestore secara real-time
+    function loadVocabFromFirestore() {
+        const q = query(collection(db, "vocabularies"), orderBy("createdAt", "desc"));
+        
+        onSnapshot(q, (querySnapshot) => {
+            vocabData = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                vocabData.push({
+                    id: doc.id,
+                    word: data.word || '',
+                    meaning: data.meaning || '',
+                    pronunciation: data.pronunciation || '',
+                    pos: data.pos || '',
+                    example: data.example || '',
+                    synonym: data.synonym || '',
+                    category: data.category || '',
+                    mastery: data.mastery || '1'
+                });
+            });
+            
             renderVocabTable();
-            saveToLocalStorage();
+        }, (error) => {
+            console.error("Error loading documents: ", error);
+            vocabBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #d81b60;">Error loading data. Please check your connection.</td></tr>`;
+        });
+    }
+    
+    // Event Listeners
+    addBtn.addEventListener('click', addVocab);
+    cancelBtn.addEventListener('click', () => modal.style.display = 'none');
+    vocabForm.addEventListener('submit', saveVocab);
+    searchInput.addEventListener('input', searchVocab);
+    exportBtn.addEventListener('click', exportToExcel);
+    
+    // Event listener untuk sorting
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            sortData(th.getAttribute('data-sort'));
+        });
+    });
+    
+    // Event listener untuk filter
+    filters.forEach(filter => {
+        filter.addEventListener('click', () => {
+            filters.forEach(f => f.classList.remove('active'));
+            filter.classList.add('active');
+            currentFilter = filter.getAttribute('data-filter');
+            renderVocabTable();
+        });
+    });
+    
+    // Tutup modal ketika klik di luar area konten
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) {
             modal.style.display = 'none';
         }
-        
-        // Cari vocabulary
-        function searchVocab() {
-            const searchTerm = searchInput.value.toLowerCase();
-            
-            if (searchTerm.trim() === '') {
-                renderVocabTable();
-                return;
-            }
-            
-            const filteredData = vocabData.filter(item => 
-                item.word.toLowerCase().includes(searchTerm) ||
-                item.meaning.toLowerCase().includes(searchTerm) ||
-                (item.example && item.example.toLowerCase().includes(searchTerm)) ||
-                (item.synonym && item.synonym.toLowerCase().includes(searchTerm)) ||
-                (item.category && item.category.toLowerCase().includes(searchTerm))
-            );
-            
-            renderVocabTable(filteredData);
+        if (e.target === confirmModal) {
+            confirmModal.style.display = 'none';
         }
-        
-        // Urutkan data
-        function sortData(column) {
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.column = column;
-                currentSort.direction = 'asc';
-            }
-            
-            vocabData.sort((a, b) => {
-                let valueA = a[column] || '';
-                let valueB = b[column] || '';
-                
-                // Untuk pengurutan numerik pada kolom mastery
-                if (column === 'mastery') {
-                    valueA = parseInt(valueA);
-                    valueB = parseInt(valueB);
-                } else {
-                    // Untuk pengurutan teks
-                    valueA = valueA.toString().toLowerCase();
-                    valueB = valueB.toString().toLowerCase();
-                }
-                
-                if (valueA < valueB) return currentSort.direction === 'asc' ? -1 : 1;
-                if (valueA > valueB) return currentSort.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-            
-            renderVocabTable();
-        }
-        
-        // Export ke Excel (simulasi)
-        function exportToExcel() {
-            alert('Fitur export akan mengunduh file Excel dengan semua vocabulary Anda. Data Anda aman dan tersimpan di browser.');
-            // Dalam implementasi nyata, ini akan mengunduh file Excel
-        }
-        
-        // Simpan ke localStorage
-        function saveToLocalStorage() {
-            localStorage.setItem('vocabData', JSON.stringify(vocabData));
-        }
-        
-        // Muat dari localStorage
-        function loadFromLocalStorage() {
-            const savedData = localStorage.getItem('vocabData');
-            if (savedData) {
-                vocabData = JSON.parse(savedData);
-            }
-            renderVocabTable();
-        }
-        
-        // Event Listeners
-        addBtn.addEventListener('click', addVocab);
-        cancelBtn.addEventListener('click', () => modal.style.display = 'none');
-        vocabForm.addEventListener('submit', saveVocab);
-        searchInput.addEventListener('input', searchVocab);
-        exportBtn.addEventListener('click', exportToExcel);
-        
-        // Event listener untuk sorting
-        document.querySelectorAll('th[data-sort]').forEach(th => {
-            th.addEventListener('click', () => {
-                sortData(th.getAttribute('data-sort'));
-            });
-        });
-        
-        // Event listener untuk filter
-        filters.forEach(filter => {
-            filter.addEventListener('click', () => {
-                filters.forEach(f => f.classList.remove('active'));
-                filter.classList.add('active');
-                currentFilter = filter.getAttribute('data-filter');
-                renderVocabTable();
-            });
-        });
-        
-        // Tutup modal ketika klik di luar area konten
-        window.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-            if (e.target === confirmModal) {
-                confirmModal.style.display = 'none';
-            }
-        });
-        
-        // Muat data saat halaman dimuat
-        document.addEventListener('DOMContentLoaded', () => {
-            loadFromLocalStorage();
-            // Set filter "all" sebagai aktif
-            document.querySelector('.filter[data-filter="all"]').classList.add('active');
-        });
-    </script>
+    });
+    
+    // Muat data saat halaman dimuat
+    document.addEventListener('DOMContentLoaded', () => {
+        loadVocabFromFirestore();
+        // Set filter "all" sebagai aktif
+        document.querySelector('.filter[data-filter="all"]').classList.add('active');
+    });
+</script>
 </body>
 </html>
+
